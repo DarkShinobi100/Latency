@@ -12,6 +12,7 @@
 #include <string>
 #include <winsock2.h>
 #include "../Message.h"
+#include <time.h> 
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -63,14 +64,25 @@ int main()
 	// ntohs does the opposite of htons.
 	printf("Port number to send to: %d\n\n", ntohs(toAddr.sin_port));
 
+	//initalise random seed
+
+	srand(time(NULL));
+	int myID = rand();
+	printf("my ID: %i", myID);
+	printf("\n");
+
+	fd_set readable;
+	FD_ZERO(&readable);
+
 	Message msg;
-	msg.objectID = 1;
-	msg.x = 5;
-	msg.y = 2;
+	msg.objectID = myID;
+	msg.x = rand();
+	msg.y = rand();
 
 	do {
 		Sleep(1000);// artifical delay to prevent constant running
-		printf("Type some text (\"quit\" to exit): ");
+		//printf("Type some text (\"quit\" to exit): ");
+		//printf("'\n");
 		fflush(stdout);
 
 		// Send the message to the server.
@@ -80,24 +92,49 @@ int main()
 			die("sendto failed");
 		}
 
-		// Read a response back from the server (or from anyone, in fact).
-		sockaddr_in fromAddr;
-		int fromAddrSize = sizeof(fromAddr);
-		int count = recvfrom(sock, (char*) &msg, sizeof(Message), 0,
-			                 (sockaddr *) &fromAddr, &fromAddrSize);
-		if (count < 0)
-		{
-			die("recvfrom failed");
-		}
-		if (count != sizeof(Message))
-		{
-			die("received odd-sized message");
-		}
+		//the structure that describes how long to wait for something to happen
+		timeval timeout;
+		//we want a 2.5 second timeout
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 0;
 
-		printf("Received %d bytes from address %s port %d: '",
-			   count, inet_ntoa(fromAddr.sin_addr), ntohs(fromAddr.sin_port));
-		printf("Received object  %i at position: %i %i '",msg.objectID,msg.x, msg.y);
-		printf("'\n");
+		FD_SET(sock, &readable);
+
+		int count;
+		do 
+		{
+			count = select(0, &readable, NULL, NULL, &timeout);
+			if (count == SOCKET_ERROR)
+			{
+				die("select failed");
+			}
+
+			if (FD_ISSET(sock, &readable))
+			{
+				// Read a response back from the server (or from anyone, in fact).
+				sockaddr_in fromAddr;
+				int fromAddrSize = sizeof(fromAddr);
+				int datacount = recvfrom(sock, (char*)&msg, sizeof(Message), 0,
+					(sockaddr*)&fromAddr, &fromAddrSize);
+				if (datacount < 0)
+				{
+					die("recvfrom failed");
+				}
+				if (datacount != sizeof(Message))
+				{
+					die("received odd-sized message");
+				}
+
+				if (msg.objectID != myID)
+				{
+					printf("Received %d bytes from address %s port %d: '",
+						count, inet_ntoa(fromAddr.sin_addr), ntohs(fromAddr.sin_port));
+					printf("Received object  %i at position: %i %i '", msg.objectID, msg.x, msg.y);
+					printf("'\n");
+				}
+			}
+
+		} while (count > 0);
 
 		// Keep going until we get a message starting with "quit".
 	} while (true); //don't do this in a real world program

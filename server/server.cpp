@@ -10,15 +10,22 @@
 #include <string.h>
 #include <winsock2.h>
 #include "../Message.h"
+#include <vector>
+
 
 #pragma comment(lib, "ws2_32.lib")
-
 
 // The IP address for the server
 #define SERVERIP "127.0.0.1"
 
 // The UDP port number for the server
 #define SERVERPORT 4444
+
+bool operator==(const sockaddr_in& left, const sockaddr_in& right)
+{
+	return (left.sin_port == right.sin_port)
+		&& (memcmp(&left.sin_addr, &right.sin_addr, sizeof(left.sin_addr)) == 0);
+}
 
 // Prototypes
 void die(const char *message);
@@ -27,6 +34,7 @@ void die(const char *message);
 int main()
 {
 	printf("Echo Server\n");
+	std::vector<sockaddr_in> clients;
 
 	// Initialise the WinSock library -- we want version 2.2.
 	WSADATA w;
@@ -84,17 +92,45 @@ int main()
 			die("received odd-sized message");
 		}
 
+		//check if client exists in the list already
+		bool clientExists = false;
+
+		if (!clients.empty())
+		{
+			for (const auto& address : clients)
+			{//compare client who just messaged us to the clients in the vector
+				clientExists |= (address == fromAddr);
+			}
+		}
+		else //if it isn't there
+		{
+			clientExists = false;
+		}
+
+		if (!clientExists)//add it to the vector
+		{
+			clients.push_back(fromAddr);
+		}
+
+		msg.x++;
+		msg.y--;
+
 		printf("Received %d bytes from address %s port %d: '",
 			   count, inet_ntoa(fromAddr.sin_addr), ntohs(fromAddr.sin_port));
 		printf("Received object  %i at position: %i %i '", msg.objectID, msg.x, msg.y);
+
+		printf("\n CLIENT COUNT: %i", clients.size());
 		printf("'\n");
 
-		// Send the same data back to the address it came from.
-		if (sendto(sock, (const char*)&msg, sizeof(Message), 0,
-			(const sockaddr*)&fromAddr, sizeof(fromAddr)) != sizeof(Message))
+		for (const auto& address : clients)
 		{
-			die("sendto failed");
-		}
+			// Send the same data back to the address it came from.
+			if (sendto(sock, (const char*)&msg, sizeof(Message), 0,
+				(const sockaddr*)&address, sizeof(address)) != sizeof(Message))
+			{
+				die("sendto failed");
+			}
+		}		
 	}
 
 	// We won't actually get here, but if we did then we'd want to clean up...
