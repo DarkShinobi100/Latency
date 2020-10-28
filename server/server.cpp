@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <winsock2.h>
+#include "../Message.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -18,10 +19,6 @@
 
 // The UDP port number for the server
 #define SERVERPORT 4444
-
-// The (fixed) size of message that we send between the two programs
-#define MESSAGESIZE 40
-
 
 // Prototypes
 void die(const char *message);
@@ -66,8 +63,10 @@ int main()
 	// ntohs does the opposite of htons.
 	printf("Server socket bound to address %s, port %d\n", inet_ntoa(serverAddr.sin_addr), ntohs(serverAddr.sin_port));
 
-	// We'll use this array to hold the messages we exchange with the client.
-	char buffer[MESSAGESIZE];
+	Message msg;
+	msg.objectID = 0;
+	msg.x = 0;
+	msg.y = 0;
 
 	while (true)
 	{
@@ -75,25 +74,24 @@ int main()
 
 		sockaddr_in fromAddr;
 		int fromAddrSize = sizeof(fromAddr);
-		int count = recvfrom(sock, buffer, MESSAGESIZE, 0,
-			                 (sockaddr *) &fromAddr, &fromAddrSize);
+		int count = recvfrom(sock, (char*)&msg, sizeof(Message), 0,(sockaddr*)&fromAddr, &fromAddrSize);
 		if (count < 0)
 		{
 			die("recvfrom failed");
 		}
-		if (count != MESSAGESIZE)
+		if (count != sizeof(Message))
 		{
 			die("received odd-sized message");
 		}
 
 		printf("Received %d bytes from address %s port %d: '",
 			   count, inet_ntoa(fromAddr.sin_addr), ntohs(fromAddr.sin_port));
-		fwrite(buffer, 1, count, stdout);
+		printf("Received object  %i at position: %i %i '", msg.objectID, msg.x, msg.y);
 		printf("'\n");
 
 		// Send the same data back to the address it came from.
-		if (sendto(sock, buffer, MESSAGESIZE, 0,
-			       (const sockaddr *) &fromAddr, sizeof(fromAddr)) != MESSAGESIZE)
+		if (sendto(sock, (const char*)&msg, sizeof(Message), 0,
+			(const sockaddr*)&fromAddr, sizeof(fromAddr)) != sizeof(Message))
 		{
 			die("sendto failed");
 		}

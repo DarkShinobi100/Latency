@@ -11,6 +11,7 @@
 #include <string.h>
 #include <string>
 #include <winsock2.h>
+#include "../Message.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -20,9 +21,6 @@
 
 // The UDP port number on the server
 #define SERVERPORT 4444
-
-// The (fixed) size of message that we send between the two programs
-#define MESSAGESIZE 40
 
 
 // Prototypes
@@ -65,25 +63,19 @@ int main()
 	// ntohs does the opposite of htons.
 	printf("Port number to send to: %d\n\n", ntohs(toAddr.sin_port));
 
-	// We'll use this buffer to hold the messages we exchange with the server.
-	char buffer[MESSAGESIZE];
+	Message msg;
+	msg.objectID = 1;
+	msg.x = 5;
+	msg.y = 2;
 
 	do {
+		Sleep(1000);// artifical delay to prevent constant running
 		printf("Type some text (\"quit\" to exit): ");
 		fflush(stdout);
 
-		// Read a line of text from the user.
-		std::string line;
-		std::getline(std::cin, line);
-		// Now "line" contains what the user typed (without the trailing \n).
-
-		// Copy the line into the buffer, filling the rest with dashes.
-		memset(buffer, '-', MESSAGESIZE);
-		memcpy(buffer, line.c_str(), min(line.size(), MESSAGESIZE));
-
 		// Send the message to the server.
-		if (sendto(sock, buffer, MESSAGESIZE, 0,
-			(const sockaddr *)&toAddr, sizeof(toAddr)) != MESSAGESIZE)
+		if (sendto(sock, (const char*) &msg, sizeof(Message), 0,
+			(const sockaddr *)&toAddr, sizeof(toAddr)) != sizeof(Message))
 		{
 			die("sendto failed");
 		}
@@ -91,24 +83,24 @@ int main()
 		// Read a response back from the server (or from anyone, in fact).
 		sockaddr_in fromAddr;
 		int fromAddrSize = sizeof(fromAddr);
-		int count = recvfrom(sock, buffer, MESSAGESIZE, 0,
+		int count = recvfrom(sock, (char*) &msg, sizeof(Message), 0,
 			                 (sockaddr *) &fromAddr, &fromAddrSize);
 		if (count < 0)
 		{
 			die("recvfrom failed");
 		}
-		if (count != MESSAGESIZE)
+		if (count != sizeof(Message))
 		{
 			die("received odd-sized message");
 		}
 
 		printf("Received %d bytes from address %s port %d: '",
 			   count, inet_ntoa(fromAddr.sin_addr), ntohs(fromAddr.sin_port));
-		fwrite(buffer, 1, count, stdout);
+		printf("Received object  %i at position: %i %i '",msg.objectID,msg.x, msg.y);
 		printf("'\n");
 
 		// Keep going until we get a message starting with "quit".
-	} while (memcmp(buffer, "quit", 4) != 0);
+	} while (true); //don't do this in a real world program
 
 	printf("Quitting\n");
 
